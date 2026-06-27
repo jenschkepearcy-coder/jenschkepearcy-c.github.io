@@ -103,10 +103,10 @@
         <strong id="statusTitle">准备防守</strong>
         <p id="statusText">建议先用光箭塔清小怪，再用翼兵营拖住敌人，灵感炮塔适合怪物聚集时。</p>
       </div>
-      <button class="tower-btn active" type="button" data-tower="arrow" style="--tower:#a78bfa">光箭塔 <small>50 金币 · 快速单体</small></button>
-      <button class="tower-btn" type="button" data-tower="magic" style="--tower:#22d3ee">星咒塔 <small>80 金币 · 高伤单体</small></button>
-      <button class="tower-btn" type="button" data-tower="barracks" style="--tower:#f0f9ff">翼兵营 <small>75 金币 · 小兵拖延</small></button>
-      <button class="tower-btn" type="button" data-tower="cannon" style="--tower:#fb923c">灵感炮塔 <small>100 金币 · 范围伤害</small></button>
+      <button class="tower-btn active" type="button" data-tower="arrow" style="--tower:#a78bfa">光箭塔 <small>50 金币 · 极快补刀</small></button>
+      <button class="tower-btn" type="button" data-tower="magic" style="--tower:#22d3ee">星咒塔 <small>80 金币 · 慢速高伤</small></button>
+      <button class="tower-btn" type="button" data-tower="barracks" style="--tower:#f0f9ff">翼兵营 <small>75 金币 · 下场拦截</small></button>
+      <button class="tower-btn" type="button" data-tower="cannon" style="--tower:#fb923c">灵感炮塔 <small>100 金币 · 慢速群伤</small></button>
       <button class="primary" id="startWave" type="button">开始第 1 波</button>
     </footer>
   </div>
@@ -140,10 +140,10 @@
     const DPR = IS_MOBILE ? 1 : Math.min(window.devicePixelRatio || 1, 1.25);
     const FRAME_MS = IS_MOBILE ? 33 : 25;
     const towers = {
-      arrow: {name:'光箭塔', cost:50, range:128, cooldown:.46, damage:8, color:'#a78bfa', kind:'single'},
-      magic: {name:'星咒塔', cost:80, range:138, cooldown:1.08, damage:22, color:'#22d3ee', kind:'single'},
-      barracks: {name:'翼兵营', cost:75, range:104, cooldown:.72, damage:5, color:'#f0f9ff', kind:'slow'},
-      cannon: {name:'灵感炮塔', cost:100, range:122, cooldown:1.18, damage:14, color:'#fb923c', kind:'splash'}
+      arrow: {name:'光箭塔', cost:50, range:132, cooldown:.28, damage:5, color:'#a78bfa', kind:'single', role:'极快单体，适合清小怪和补刀'},
+      magic: {name:'星咒塔', cost:80, range:148, cooldown:1.05, damage:26, color:'#22d3ee', kind:'single', role:'慢速高伤，适合打石甲怪'},
+      barracks: {name:'翼兵营', cost:75, range:118, cooldown:.58, damage:4, color:'#f0f9ff', kind:'block', role:'派出翼兵下场拦截，拖住敌人'},
+      cannon: {name:'灵感炮塔', cost:100, range:126, cooldown:1.34, damage:21, color:'#fb923c', kind:'splash', role:'慢速范围爆炸，适合打成群敌人'}
     };
     const waves = [
       [{type:'slime', count:5, gap:.78}],
@@ -210,10 +210,10 @@
       totalPathLen = 0;
       for(let i=0;i<path.length-1;i++) totalPathLen += distance(path[i],path[i+1]);
       slots = [
-        {x:W*.353,y:H*.224,r:26,tower:null},
-        {x:W*.625,y:H*.230,r:26,tower:null},
-        {x:W*.421,y:H*.535,r:26,tower:null},
-        {x:W*.669,y:H*.670,r:26,tower:null}
+        {x:W*.352,y:H*.235,r:26,tower:null},
+        {x:W*.634,y:H*.238,r:26,tower:null},
+        {x:W*.421,y:H*.552,r:26,tower:null},
+        {x:W*.671,y:H*.682,r:26,tower:null}
       ];
       placed.forEach(t=>{
         const s = slots[t.slotIndex];
@@ -273,7 +273,7 @@
     function spawnEnemy(type){
       const def = enemyDefs[type];
       const p = pointOnPath(0);
-      enemies.push({type, x:p.x, y:p.y, dist:0, hp:def.hp, maxHp:def.hp, speed:def.speed, slow:0, hit:0, alive:true});
+      enemies.push({type, x:p.x, y:p.y, dist:0, hp:def.hp, maxHp:def.hp, speed:def.speed, slow:0, block:0, hit:0, alive:true});
     }
     function placeTower(x,y){
       if(finished) return;
@@ -283,10 +283,10 @@
       const cfg = towers[selected];
       if(gold < cfg.cost){ showToast(`金币不足，${cfg.name}需要 ${cfg.cost} 金币。`); return; }
       gold -= cfg.cost;
-      const tower = {type:selected, slotIndex:hitIndex, x:hit.x, y:hit.y, level:1, cd:Math.random()*.2, pulse:0, soldiers: selected==='barracks' ? 2 : 0};
+      const tower = {type:selected, slotIndex:hitIndex, x:hit.x, y:hit.y, level:1, cd:Math.random()*.2, pulse:0, fire:0, guardTime:0, guardX:hit.x, guardY:hit.y, soldiers: selected==='barracks' ? 2 : 0};
       hit.tower = tower; placed.push(tower);
       addSummon(hit.x,hit.y,cfg.color); addFloat(hit.x,hit.y-34,`-${cfg.cost}`,'#facc15');
-      setStatus(`${cfg.name}已建造`,'第 1 关暂不开放升级。先观察敌人路线，必要时补充不同类型的塔。');
+      setStatus(`${cfg.name}已建造`,`${cfg.role}。第 1 关暂不开放升级。`);
       updateHud();
     }
     function findTarget(t, range){
@@ -314,14 +314,18 @@
     }
     function updateTowers(dt){
       for(const t of placed){
-        const cfg = towers[t.type]; t.cd -= dt; t.pulse += dt;
+        const cfg = towers[t.type]; t.cd -= dt; t.pulse += dt; t.fire = Math.max(0, (t.fire || 0) - dt); t.guardTime = Math.max(0, (t.guardTime || 0) - dt);
         if(t.cd > 0) continue;
         const target = findTarget(t,cfg.range);
         if(!target) continue;
         t.cd = cfg.cooldown;
-        if(cfg.kind === 'slow'){
-          target.slow = Math.max(target.slow, .9);
-          shots.push({kind:'slash', x:t.x, y:t.y, tx:target.x, ty:target.y, life:.24, max:.24, color:cfg.color, target});
+        t.fire = .18;
+        if(cfg.kind === 'block'){
+          target.block = Math.max(target.block, .46);
+          target.slow = Math.max(target.slow, .85);
+          t.guardX = target.x; t.guardY = target.y;
+          t.guardTime = .42;
+          shots.push({kind:'slash', x:target.x-20, y:target.y-8, tx:target.x+12, ty:target.y+8, life:.24, max:.24, color:cfg.color, target});
           damageEnemy(target,cfg.damage,cfg.color);
         } else {
           shots.push({kind:cfg.kind, x:t.x, y:t.y, sx:t.x, sy:t.y, tx:target.x, ty:target.y, life:0, dur:t.type==='magic'?.38:t.type==='cannon'?.44:.26, color:cfg.color, target, damage:cfg.damage, splash:cfg.kind==='splash'});
@@ -346,8 +350,8 @@
       const totalLen = pathLength();
       for(const e of enemies){
         if(!e.alive) continue;
-        const slowFactor = e.slow > 0 ? .55 : 1;
-        e.slow = Math.max(0, e.slow - dt); e.hit = Math.max(0, e.hit - dt);
+        const slowFactor = e.block > 0 ? .05 : e.slow > 0 ? .55 : 1;
+        e.slow = Math.max(0, e.slow - dt); e.block = Math.max(0, e.block - dt); e.hit = Math.max(0, e.hit - dt);
         e.dist += e.speed * slowFactor * dt;
         if(e.dist >= totalLen){
           e.alive=false; life -= enemyDefs[e.type].leak; addBurst(path[path.length-1].x,path[path.length-1].y,'#fb7185',9,.55);
@@ -461,10 +465,20 @@
       const img = assets[t.type];
       const bob = Math.sin(performance.now()/650 + t.slotIndex) * 1.2;
       if(img){
-        const size = t.type==='barracks' ? 78 : t.type==='cannon' ? 72 : 68;
+        const fireScale = 1 + (t.fire || 0) * .55;
+        const size = t.type==='barracks' ? 76 : t.type==='cannon' ? 72 : 66;
         const drawH = size * (img.height / img.width);
         ctx.shadowColor=cfg.color; ctx.shadowBlur=IS_MOBILE ? 0 : 6;
-        ctx.drawImage(img, -size/2, -drawH*.72 + bob, size, drawH);
+        ctx.save();
+        if(t.type==='cannon'){
+          ctx.rotate(.48);
+          ctx.scale(fireScale, fireScale);
+          ctx.drawImage(img, -size*.62, -drawH*.76 + bob, size*1.18, drawH*1.18);
+        } else {
+          ctx.scale(fireScale, fireScale);
+          ctx.drawImage(img, -size/2, -drawH*.72 + bob, size, drawH);
+        }
+        ctx.restore();
         ctx.shadowBlur=0;
         if(t.type==='barracks') drawBarracksSoldiers(t);
         ctx.restore();
@@ -495,13 +509,17 @@
       const img = assets.soldier;
       if(!img) return;
       for(let i=0;i<2;i++){
-        const ox = i ? 21 : -21;
-        const oy = 30 + Math.sin(performance.now()/420+i)*1.2;
+        const active = t.guardTime > 0;
+        const baseX = active ? (t.guardX - t.x) : 0;
+        const baseY = active ? (t.guardY - t.y) : 30;
+        const ox = active ? (i ? 11 : -11) : (i ? 21 : -21);
+        const oy = baseY + Math.sin(performance.now()/420+i)*1.2;
         ctx.save();
-        ctx.translate(ox, oy);
+        ctx.translate(baseX + ox, oy);
         ctx.scale(i ? -1 : 1, 1);
-        ctx.globalAlpha = .95;
-        ctx.drawImage(img, -14, -22, 28, 28 * (img.height/img.width));
+        ctx.globalAlpha = active ? 1 : .95;
+        const s = active ? 32 : 28;
+        ctx.drawImage(img, -s/2, -s*.78, s, s * (img.height/img.width));
         ctx.restore();
       }
     }
@@ -580,7 +598,9 @@
       btn.addEventListener('click',()=>{
         selected=btn.dataset.tower;
         document.querySelectorAll('.tower-btn').forEach(b=>b.classList.toggle('active',b===btn));
-        const cfg=towers[selected]; showToast(`已选择：${cfg.name}`);
+        const cfg=towers[selected];
+        showToast(`已选择：${cfg.name}`);
+        setStatus(cfg.name, cfg.role);
       });
     });
     startBtn.addEventListener('click',startWave);
